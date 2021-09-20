@@ -1,6 +1,11 @@
 #include <igl/opengl/glfw/Viewer.h>
 #include <igl/read_triangle_mesh.h>
 #include "trimesh.h"
+#include <algorithm>
+
+int retrieveIndexForEdge(trimesh::edge_t e, std::vector<trimesh::edge_t> edges) {
+    return std::distance(edges.begin(), std::find_if(edges.begin(), edges.end(), [&](const auto& val) {return (val.v[0] == e.v[0] && val.v[1] == e.v[1]) || (val.v[1] == e.v[0] && val.v[0] == e.v[1]); }));
+}
 
 int main(int argc, char *argv[])
 {
@@ -8,57 +13,123 @@ int main(int argc, char *argv[])
     Eigen::MatrixXi F;
     igl::read_triangle_mesh("../../input/cube.obj", V,F);
 
-    // half-edges example
-    std::vector< trimesh::triangle_t > triangles;
+    std::vector< trimesh::triangle_t > prevTriangles;
 
-    int kNumVertices = V.rows();
-    int kNumFaces = F.rows();
-    triangles.resize( kNumFaces );
-    for (int i=0; i<kNumFaces; ++i){
-        triangles[i].v[0] = F(i,0);
-        triangles[i].v[1] = F(i,1);
-        triangles[i].v[2] = F(i,2);
+    int prevNumVertices = V.rows();
+    int prevNumFaces = F.rows();
+    prevTriangles.resize( prevNumFaces );
+    for (int i=0; i<prevNumFaces; ++i){
+        prevTriangles[i].v[0] = F(i,0);
+        prevTriangles[i].v[1] = F(i,1);
+        prevTriangles[i].v[2] = F(i,2);
     }
 
-    std::vector< trimesh::edge_t > edges;
-    trimesh::unordered_edges_from_triangles( triangles.size(), &triangles[0], edges );
+    std::vector< trimesh::edge_t > prevEdges;
+    trimesh::unordered_edges_from_triangles(prevTriangles.size(), &prevTriangles[0], prevEdges );
 
-    trimesh::trimesh_t mesh;
-    mesh.build( kNumVertices, triangles.size(), &triangles[0], edges.size(), &edges[0] );
+    trimesh::trimesh_t prevMesh;
+    prevMesh.build( prevNumVertices, prevTriangles.size(), &prevTriangles[0], prevEdges.size(), &prevEdges[0] );
 
-    std::vector< trimesh::index_t > neighs;
-    for( int vi = 0; vi < kNumVertices; ++vi )
+    // 1. Insert new Vertices at midpoint of each edge.
+    int numCurrVertices = prevNumVertices + prevEdges.size();
+    V.conservativeResize(numCurrVertices,Eigen::NoChange);
+    for (int nvi = prevNumVertices; nvi < numCurrVertices; nvi++)
     {
-        mesh.vertex_vertex_neighbors( vi, neighs );
-
-        std::cout << "neighbors of vertex " << vi << ": ";
-        for( int i = 0; i < neighs.size(); ++i )
-        {
-            std::cout << ' ' << neighs.at(i);
-        }
-        std::cout << '\n';
+        V.row(nvi) = 0.5 * V.row(prevEdges[nvi - prevNumVertices].start()) + 0.5 * V.row(prevEdges[nvi - prevNumVertices].end());
     }
-    std::vector< int > a = mesh.get_face_from_he_index(0);
-    std::cout << a[0] << a[1] << a[2] << std::endl;
-    Eigen::MatrixXi newF;
-    newF = mesh.get_faces();
-    std::cout<< "\n" << newF << "\n";
-    // output the mesh
-    igl::writeOBJ("../output/cube.obj", V, F);
 
+    std::cout << V;
+
+    // 2. Remove Old Connections and Remake new
+    std::vector< trimesh::triangle_t > currTriangles;
+    for (int fi = prevNumFaces - 1; fi >= 0; fi--) {
+        trimesh::triangle_t abc = prevTriangles[fi];
+
+        trimesh::edge_t ei, ej, ek;
+        ei.v[0] = abc.v[0];
+        ei.v[1] = abc.v[1];
+        ej.v[0] = abc.v[1];
+        ej.v[1] = abc.v[2];
+        ek.v[0] = abc.v[2];
+        ek.v[1] = abc.v[0];
+
+        int i = retrieveIndexForEdge(ei, prevEdges) + prevNumVertices;
+        int j = retrieveIndexForEdge(ej, prevEdges) + prevNumVertices;
+        int k = retrieveIndexForEdge(ek, prevEdges) + prevNumVertices;
+
+        trimesh::triangle_t aik, bji, ckj, ijk;
+        aik.v[0] = abc.v[0];
+        aik.v[1] = i;
+        aik.v[2] = k;
+
+        bji.v[0] = abc.v[1];
+        bji.v[1] = j;
+        bji.v[2] = i;
+
+        ckj.v[0] = abc.v[2];
+        ckj.v[1] = k;
+        ckj.v[2] = j;
+
+        ijk.v[0] = i;
+        ijk.v[1] = j;
+        ijk.v[2] = k;
+
+        currTriangles.push_back(aik);
+        currTriangles.push_back(bji);
+        currTriangles.push_back(ckj);
+        currTriangles.push_back(ijk);
+    }
+    std::vector< trimesh::edge_t > currEdges;
+    trimesh::unordered_edges_from_triangles(currTriangles.size(), &currTriangles[0], currEdges);
+
+    trimesh::trimesh_t currMesh;
+    currMesh.build(numCurrVertices, currTriangles.size(), &currTriangles[0], currEdges.size(), &currEdges[0]);
+
+    //3. Update Old Vertices
+
+    //4. Update New Vertices
+    for (int i = 0; i < prevEdges.size(); i++) {
+        int nvi = i + prevNumVertices;
+
+        trimesh::edge_t edge = prevEdges[i];
+        int hei = prevMesh.directed_edge2he_index(edge.v[0], edge.v[1]);
+        trimesh::trimesh_t::halfedge_t he_1 = prevMesh.halfedge(hei);
+        trimesh::trimesh_t::halfedge_t he_2 = prevMesh.halfedge(he_1.next_he);
+        trimesh::trimesh_t::halfedge_t he_5 = prevMesh.halfedge(he_2.next_he);
+        trimesh::trimesh_t::halfedge_t he_8 = prevMesh.halfedge(he_1.opposite_he);
+        trimesh::trimesh_t::halfedge_t he_9 = prevMesh.halfedge(he_8.next_he);
+        trimesh::trimesh_t::halfedge_t he_12 = prevMesh.halfedge(he_9.next_he);
+
+        int stencil[] = { 8, -1, 1, 1, 8, -1, 1 , 1 };
+        trimesh::index_t vertices_of_stencil[8];
+
+        vertices_of_stencil[0] = he_1.to_vertex;
+        vertices_of_stencil[1] = prevMesh.halfedge(prevMesh.halfedge(he_2.opposite_he).next_he).to_vertex;
+        vertices_of_stencil[2] = he_2.to_vertex;
+        vertices_of_stencil[3] = prevMesh.halfedge(prevMesh.halfedge(he_5.opposite_he).next_he).to_vertex;
+
+        vertices_of_stencil[4] = he_8.to_vertex;
+        vertices_of_stencil[5] = prevMesh.halfedge(prevMesh.halfedge(he_9.opposite_he).next_he).to_vertex;
+        vertices_of_stencil[6] = he_9.to_vertex;
+        vertices_of_stencil[7] = prevMesh.halfedge(prevMesh.halfedge(he_12.opposite_he).next_he).to_vertex;
+
+
+        for (int i = 0; i < sizeof(vertices_of_stencil) / sizeof(vertices_of_stencil[0]);  i++) {
+            V.row(nvi) += stencil[i] * V.row(vertices_of_stencil[i]);
+        }
+    }
+  
+    F = currMesh.get_faces();
     // Plot the mesh
     igl::opengl::glfw::Viewer viewer;
-    viewer.data().set_mesh(V, newF);
-    viewer.data().set_face_based(true);
-    const Eigen::RowVector3d red = Eigen::RowVector3d(1,0,0);
-    // add vertices highlights
-    viewer.data().point_size = 20;
-    viewer.data().add_points(V, red);
-    // add vertices index
-    for (int i=0; i<V.rows(); ++i){
-        viewer.data().add_label(V.row(i)+Eigen::RowVector3d(0.005, 0.005, 0),std::to_string(i));
-    }
-    viewer.data().show_custom_labels = true;
+    viewer.data().set_mesh(V, F);
+    viewer.data().add_points(V, Eigen::RowVector3d(1, 0, 0));
+    // Compute per-face normals
+    Eigen::MatrixXd N_faces;
+    igl::per_face_normals(V, F, N_faces);
+    viewer.data().set_normals(N_faces);
+
     // launch viewer
     viewer.launch();
 }
+
