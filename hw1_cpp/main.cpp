@@ -11,12 +11,16 @@ int main(int argc, char *argv[])
 {
     Eigen::MatrixXd V;
     Eigen::MatrixXi F;
-    igl::read_triangle_mesh("../../input/cube.obj", V,F);
+    igl::read_triangle_mesh("../../output/cube_butterfly_3.obj", V,F);
 
     std::vector< trimesh::triangle_t > prevTriangles;
 
     int prevNumVertices = V.rows();
     int prevNumFaces = F.rows();
+
+    std::cout << "Number of Vertices: " << prevNumVertices << "\n";
+    std::cout << "Number of Faces: " << prevNumFaces << "\n";
+
     prevTriangles.resize( prevNumFaces );
     for (int i=0; i<prevNumFaces; ++i){
         prevTriangles[i].v[0] = F(i,0);
@@ -31,14 +35,13 @@ int main(int argc, char *argv[])
     prevMesh.build( prevNumVertices, prevTriangles.size(), &prevTriangles[0], prevEdges.size(), &prevEdges[0] );
 
     // 1. Insert new Vertices at midpoint of each edge.
+    
     int numCurrVertices = prevNumVertices + prevEdges.size();
     V.conservativeResize(numCurrVertices,Eigen::NoChange);
     for (int nvi = prevNumVertices; nvi < numCurrVertices; nvi++)
     {
         V.row(nvi) = 0.5 * V.row(prevEdges[nvi - prevNumVertices].start()) + 0.5 * V.row(prevEdges[nvi - prevNumVertices].end());
     }
-
-    std::cout << V;
 
     // 2. Remove Old Connections and Remake new
     std::vector< trimesh::triangle_t > currTriangles;
@@ -100,7 +103,7 @@ int main(int argc, char *argv[])
         trimesh::trimesh_t::halfedge_t he_9 = prevMesh.halfedge(he_8.next_he);
         trimesh::trimesh_t::halfedge_t he_12 = prevMesh.halfedge(he_9.next_he);
 
-        int stencil[] = { 8, -1, 1, 1, 8, -1, 1 , 1 };
+        double stencil[] = { 8, -1, 2, -1, 8, -1, 2 , -1 };
         trimesh::index_t vertices_of_stencil[8];
 
         vertices_of_stencil[0] = he_1.to_vertex;
@@ -113,23 +116,39 @@ int main(int argc, char *argv[])
         vertices_of_stencil[6] = he_9.to_vertex;
         vertices_of_stencil[7] = prevMesh.halfedge(prevMesh.halfedge(he_12.opposite_he).next_he).to_vertex;
 
-
-        for (int i = 0; i < sizeof(vertices_of_stencil) / sizeof(vertices_of_stencil[0]);  i++) {
-            V.row(nvi) += stencil[i] * V.row(vertices_of_stencil[i]);
+        V.row(nvi) = Eigen::MatrixXd::Zero(1, 3);
+        for (int j = 0; j < sizeof(vertices_of_stencil) / sizeof(vertices_of_stencil[0]); j++) {
+            V.row(nvi) += stencil[j] / 16 * V.row(vertices_of_stencil[j]);
         }
     }
-  
     F = currMesh.get_faces();
+
+    std::cout << "Number of Vertices: " << V.rows() << "\n";
+    std::cout << "Number of Faces: " << F.rows() << "\n";
+
+
     // Plot the mesh
     igl::opengl::glfw::Viewer viewer;
     viewer.data().set_mesh(V, F);
-    viewer.data().add_points(V, Eigen::RowVector3d(1, 0, 0));
+    //viewer.data().add_points(V, Eigen::RowVector3d(1, 0, 0));
+
     // Compute per-face normals
     Eigen::MatrixXd N_faces;
     igl::per_face_normals(V, F, N_faces);
     viewer.data().set_normals(N_faces);
 
+    igl::writeOBJ("../../output/cube_butterfly_4.obj", V, F);
+
     // launch viewer
     viewer.launch();
+
+    currTriangles.clear();
+    currMesh.clear();
+    currEdges.clear();
+    prevTriangles.clear();
+    prevMesh.clear();
+    prevEdges.clear();
+    V.resize(0, 0);
+    F.resize(0, 0);
 }
 
