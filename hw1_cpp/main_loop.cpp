@@ -142,7 +142,7 @@ int main(int argc, char* argv[])
 
         V.row(nvi) = Eigen::MatrixXd::Zero(1, 3);
         for (int j = 0; j < sizeof(vertices_of_stencil) / sizeof(vertices_of_stencil[0]); j++) {
-            V.row(nvi) += stencil[j] / 8 * V.row(vertices_of_stencil[j]);
+            V.row(nvi) += stencil[j] / 8 * prevV.row(vertices_of_stencil[j]);
         }
     }
     
