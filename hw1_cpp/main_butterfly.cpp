@@ -1,3 +1,4 @@
+/*
 #include <igl/opengl/glfw/Viewer.h>
 #include <igl/read_triangle_mesh.h>
 #include "trimesh.h"
@@ -27,7 +28,6 @@ int main(int argc, char *argv[])
         prevTriangles[i].v[1] = F(i,1);
         prevTriangles[i].v[2] = F(i,2);
     }
-
     std::vector< trimesh::edge_t > prevEdges;
     trimesh::unordered_edges_from_triangles(prevTriangles.size(), &prevTriangles[0], prevEdges );
 
@@ -35,7 +35,6 @@ int main(int argc, char *argv[])
     prevMesh.build( prevNumVertices, prevTriangles.size(), &prevTriangles[0], prevEdges.size(), &prevEdges[0] );
 
     // 1. Insert new Vertices at midpoint of each edge.
-    
     int numCurrVertices = prevNumVertices + prevEdges.size();
     V.conservativeResize(numCurrVertices,Eigen::NoChange);
     for (int nvi = prevNumVertices; nvi < numCurrVertices; nvi++)
@@ -89,7 +88,8 @@ int main(int argc, char *argv[])
     currMesh.build(numCurrVertices, currTriangles.size(), &currTriangles[0], currEdges.size(), &currEdges[0]);
 
     //3. Update Old Vertices
-
+    // Nothing for butterfly
+   
     //4. Update New Vertices
     for (int i = 0; i < prevEdges.size(); i++) {
         int nvi = i + prevNumVertices;
@@ -152,3 +152,4 @@ int main(int argc, char *argv[])
     F.resize(0, 0);
 }
 
+*/
