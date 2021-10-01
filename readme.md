@@ -12,3 +12,14 @@ See instructions in subfolders.
 
 ## Homework 1
 Your task is to develop subdivision schemes. 14 Sept - 1 Oct
+
+### Instructions to run the given codes
+If you are on Windows, you can copy the example.* project two times and rename one butterflyloop and the other one sqrt3. Add mainlb.cpp to butterflyloop and mains.cpp to sqrt3. Set the project needed to be run as startup project and launch it.
+
+I struggle to change the cmake file, so if it is not fine, I can try to submit a version that will setup correctly the code.
+
+#### Loop+Butterfly Arguments
+mainlb.cpp expect the arguments in the following orders: ```{method_name} {n} {input_path}``` where method_name $$\in ["butterfly","loop"]$$.
+
+#### Sqrt(3) Arguments
+mains.cpp expect the arguments in the following orders: ```{n} {input_path} ```.
