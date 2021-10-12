@@ -86,7 +86,6 @@ int main(int argc, char * argv[])
     Eigen::SparseMatrix<double> I(massMatrix.cols(),massMatrix.rows());
     I.setIdentity();
     Eigen::SparseMatrix<double> invMassMatrix = sol.solve(I);
-    std::cout << (massMatrix * invMassMatrix).isApprox(I) << std::endl;
 
     //2
     Eigen::MatrixXd eVec;
@@ -97,17 +96,34 @@ int main(int argc, char * argv[])
     std::cout << "Sparse (NonZeros/(Cols * Rows)): " << cotL.nonZeros() << "/" << cotL.cols() * cotL.rows() << std::endl;
     std::cout << "Symmetric: " << (cotL.transpose().isApprox(cotL)) << std::endl;
     std::cout << "Non-negative (Semite Definite Positive): " << (eVal.array() >= 0).all() << std::endl;
+    //sum of row is 0
+    //compute difference
+    Eigen::SparseMatrix<double> iglcotL;
+    igl::cotmatrix(V, F, iglcotL);
+    std::cout << "Difference with igl: " << (Eigen::MatrixXd(iglcotL - cotL).array() < 0.001).all() << std::endl;
 
     //4.1 Verify it's property
-    std::cout << "Each sum of row must be equal to one-ring area/3: " << ((massMatrix * Eigen::VectorXd::Ones(massMatrix.cols()) - massMatrix.diagonal() * 2).array() < 0.001).all() << std::endl;
+    std::cout << "Sum of row must be equal to one-ring area/3: " << ((massMatrix * Eigen::VectorXd::Ones(massMatrix.cols()) - massMatrix.diagonal() * 2).array() < 0.001).all() << std::endl;
+    Eigen::SparseMatrix<double> iglmassMatrix;
+    igl::massmatrix(V, F, igl::MassMatrixType::MASSMATRIX_TYPE_DEFAULT, iglmassMatrix);
+    std::cout << "Difference with igl: " << (Eigen::MatrixXd(iglmassMatrix - massMatrix).array() < 0.001).all() << std::endl;
+    //compute difference
 
     //Compute Heat Equation
-    double dt = 1;
+    double dt = 0.00001;
     double c = 1;
-    Eigen::MatrixXd U(V.rows(), 10);
-    U.col(0) = Eigen::VectorXd::Random(V.rows()) + Eigen::VectorXd::Ones(V.rows());
+    Eigen::MatrixXd U(V.rows(), 10);// f
+    U.col(0) = Eigen::VectorXd::Random(V.rows()) + Eigen::VectorXd::Ones(V.rows()); // g
+    //igl::cotmatrix(V, F, cotL);
+    Eigen::SparseMatrix<double> deltaIntegrationStep;
+    deltaIntegrationStep = (c * invMassMatrix * cotL * dt + I); // L
+    //deltaStep = c * invMassMatrix * cotL * dt - I;
+    //Eigen::SimplicialLDLT<Eigen::MatrixXd> sol;
+    //sol.compute(deltaStep);
+    //deltaStep = sol.solve(I);
     for (int step = 0; step < 9; step++) {
-        U.col(step + 1) = c * invMassMatrix * cotL * U.col(step) * dt + U.col(step);
+        U.col(step + 1) = deltaIntegrationStep * U.col(step) ;
+        //U.col(step+1) = U.col(step) * pow((c*Laplacian*dt - 1),-1)
         std::cout << "Step: " << step + 1 << "Min: " << U.col(step + 1).minCoeff() << "Max: " << U.col(step + 1).maxCoeff() << "Average: " << U.col(step + 1).mean() << std::endl;
     }
 
