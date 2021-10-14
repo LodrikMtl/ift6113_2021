@@ -88,16 +88,24 @@ int main(int argc, char * argv[])
     es.compute(cotL);
     eigenvectors = es.eigenvectors();
 
-     //1.1 Do some checkup
-    std::cout << "Sparse (NonZeros/(Cols * Rows)): " << cotL.nonZeros() << "/" << cotL.cols() * cotL.rows() << std::endl;
-    std::cout << "Symmetric: " << (cotL.transpose().isApprox(cotL)) << std::endl;
-    std::cout << "Non-negative (Semite Definite Positive): " << (es.eigenvalues().array() >= 0).all() << std::endl;
-        
-    //4.
-    Eigen::SparseMatrix<double> massMatrix = computeMassMatrix(V, F);
-    //4.1 Verify it's property
-    std::cout << "Each sum of row must be equal to one-ring area/3: " << ((massMatrix * Eigen::VectorXd::Ones(massMatrix.cols()) - massMatrix.diagonal() * 2).array() < 0.001).all() << std::endl;
 
+     //1.1 Do some checkup
+    std::cout << "Cotangiant Laplacian Sparse (NonZeros/(Cols * Rows)): " << cotL.nonZeros() << "/" << cotL.cols() * cotL.rows() << std::endl;
+    std::cout << "Cotangiant Laplacian Symmetric: " << (cotL.transpose().isApprox(cotL)) << std::endl;
+    std::cout << "Cotangiant Laplacian Non-negative (Semite Definite Positive): " << (eVal.array() >= 0).all() << std::endl;
+    std::cout << "Cotangiant Laplacian Sum to 0: " << (Eigen::MatrixXd(cotL * Eigen::VectorXd::Ones(cotL.cols())).array() <= 0.1).all() << std::endl;
+
+    Eigen::SparseMatrix<double> iglcotL;
+
+    igl::cotmatrix(V, F, iglcotL);
+    std::cout << "Cotangent Laplacian difference with igl: " << (Eigen::MatrixXd(iglcotL + cotL).array() < 0.001).all() << std::endl;
+    //4.1 Verify it's property
+    std::cout << " Lumped Mass Matrix sum of row must be equal to one-ring area/3: " << ((massMatrix * Eigen::VectorXd::Ones(lumpedMassMatrix.cols()) - lumpedMassMatrix.diagonal()).cwiseAbs().array() < 0.001).all() << std::endl;
+
+    Eigen::SparseMatrix<double> iglmassMatrix;
+    igl::massmatrix(V, F, igl::MassMatrixType::MASSMATRIX_TYPE_BARYCENTRIC, iglmassMatrix);
+    std::cout << "Lumped Mass Matrix difference with igl: " << (Eigen::MatrixXd(iglmassMatrix - lumpedMassMatrix).array() < 0.001).all() << std::endl;
+    //compute difference
 
     igl::opengl::glfw::Viewer viewer;
     viewer.data().set_mesh(V,F);

@@ -1,3 +1,4 @@
+/*
 #include <igl/eigs.h>
 #include <igl/opengl/glfw/Viewer.h>
 #include <igl/read_triangle_mesh.h>
@@ -6,22 +7,25 @@
 #include <vector>
 #include <set>
 
-double cotan(Eigen::Vector3d a, Eigen::Vector3d b){
+#include<stdio.h>
+#include<stdlib.h>
+
+double cotan(Eigen::Vector3d a, Eigen::Vector3d b) {
     return a.dot(b) / (a.cross(b)).norm();
 }
 
-
-Eigen::SparseMatrix<double> computeCotangentLaplacian(Eigen::MatrixXd V, Eigen::MatrixXi F){
-    Eigen::SparseMatrix<double> cotL(V.rows(),V.rows());
-    cotL.reserve(Eigen::VectorXi::Constant(V.rows(), 14));
+void computeCotangentLaplacian(Eigen::MatrixXd V, Eigen::MatrixXi F, Eigen::SparseMatrix<double>& cotL) {
+    cotL.resize(V.rows(), V.rows());
+    cotL.data().squeeze();
+    //cotL.reserve(Eigen::VectorXi::Constant(V.rows(), 14));
     for (int fi = 0; fi < F.rows(); fi++) {
         Eigen::MatrixXi faces_vertices = F.row(fi);
         for (int ei = 0; ei < faces_vertices.cols(); ei++) {
-            int i,j,k;
+            int i, j, k;
             i = faces_vertices(ei);
             j = faces_vertices((ei + 1) % 3);
             k = faces_vertices((ei + 2) % 3);
-            double w = cotan(Eigen::Vector3d(V.row(k) - V.row(i)),Eigen::Vector3d(V.row(k) - V.row(j)));
+            double w = cotan(Eigen::Vector3d(V.row(k) - V.row(i)), Eigen::Vector3d(V.row(k) - V.row(j)));
 
             //The cotan angle will only be add two times because the edge i,j is only connected by two faces.
             cotL.coeffRef(i, j) -= w;
@@ -35,12 +39,12 @@ Eigen::SparseMatrix<double> computeCotangentLaplacian(Eigen::MatrixXd V, Eigen::
         }
     }
     cotL.makeCompressed();
-    return cotL/2.;
+    cotL = cotL / 2.;
 }
 
-Eigen::SparseMatrix<double> computeMassMatrix(Eigen::MatrixXd V, Eigen::MatrixXi F) {
-    Eigen::SparseMatrix<double> massMatrix(V.rows(), V.rows());
-    massMatrix.reserve(Eigen::VectorXi::Constant(V.rows(), 14));
+void computeMassMatrix(Eigen::MatrixXd V, Eigen::MatrixXi F, Eigen::SparseMatrix<double>& massMatrix) {
+    massMatrix.resize(V.rows(), V.rows());
+    massMatrix.reserve(Eigen::VectorXi::Constant(V.rows(), 10));
     for (int fi = 0; fi < F.rows(); fi++) {
         Eigen::MatrixXi faces_vertices = F.row(fi);
         for (int ei = 0; ei < faces_vertices.cols(); ei++) {
@@ -48,7 +52,7 @@ Eigen::SparseMatrix<double> computeMassMatrix(Eigen::MatrixXd V, Eigen::MatrixXi
             i = faces_vertices(ei);
             j = faces_vertices((ei + 1) % 3);
             k = faces_vertices((ei + 2) % 3);
-            double area = 1/.2 * (Eigen::Vector3d(V.row(k) - V.row(i)).cross(Eigen::Vector3d(V.row(k) - V.row(j)))).norm();
+            double area = 1 / .2 * (Eigen::Vector3d(V.row(k) - V.row(i)).cross(Eigen::Vector3d(V.row(k) - V.row(j)))).norm();
 
             //The cotan angle will only be add two times because the edge i,j is only connected by two faces.
             massMatrix.coeffRef(i, j) += area/12.;
@@ -61,68 +65,80 @@ Eigen::SparseMatrix<double> computeMassMatrix(Eigen::MatrixXd V, Eigen::MatrixXi
         }
     }
     massMatrix.makeCompressed();
-    return massMatrix / 2.;
 }
 
+void computeLumpedMassMatrix(Eigen::MatrixXd V, Eigen::MatrixXi F, Eigen::SparseMatrix<double>& lumpedMassMatrix) {
+    computeMassMatrix(V, F, lumpedMassMatrix);
+
+    lumpedMassMatrix = Eigen::SparseMatrix<double>((lumpedMassMatrix.diagonal() * 2.).asDiagonal());
+    lumpedMassMatrix.makeCompressed();
+}
 
 int main(int argc, char * argv[])
 {
+    std::string input_path = argc > 1 ? argv[1] : "../../input/camel-1.obj";
+    double dt = argc > 2 ? strtod(argv[2],NULL) : 0.01;
+    std::string method_name = argc > 3 ? argv[3] : "implicit";
+    std::string initialization_method = argc > 4 ? argv[4] : "random";
+
+
     Eigen::MatrixXd V;
     Eigen::MatrixXi F;
     Eigen::MatrixXd eigenvectors;
-    if(!igl::read_triangle_mesh(
-            argc>1?argv[1]: "../../input/camel-1.obj",V,F))
-    {
-        std::cout<<"failed to load mesh"<<std::endl;
-    }
+    
+    igl::read_triangle_mesh(input_path, V, F);
     std::cout << V.rows() << std::endl;
     std::cout << F.rows() << std::endl;
 
     //1.
-    Eigen::SparseMatrix<double> cotL = computeCotangentLaplacian(V, F);
-    Eigen::SparseMatrix<double> massMatrix = computeMassMatrix(V, F);
-    Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> sol;
-    sol.compute(massMatrix);
-    Eigen::SparseMatrix<double> I(massMatrix.cols(),massMatrix.rows());
-    I.setIdentity();
-    Eigen::SparseMatrix<double> invMassMatrix = sol.solve(I);
+    Eigen::SparseMatrix<double> cotL, massMatrix, lumpedMassMatrix, lumpedMassMatrixInverted;
+    computeCotangentLaplacian(V, F, cotL);
+    computeLumpedMassMatrix(V, F, lumpedMassMatrix);
+    lumpedMassMatrix /= 10.;
+    igl::massmatrix(V, F, igl::MassMatrixType::MASSMATRIX_TYPE_BARYCENTRIC, massMatrix);
+    std::cout << lumpedMassMatrix.diagonal() << massMatrix.diagonal() <<  std::endl;
+    lumpedMassMatrixInverted = lumpedMassMatrix.cwiseInverse();
 
     //2
     Eigen::MatrixXd eVec;
     Eigen::VectorXd eVal;
-    igl::eigs(cotL, massMatrix, 3, igl::EIGS_TYPE_SM, eVec, eVal);
-
-     //1.1 Do some checkup
-    std::cout << "Sparse (NonZeros/(Cols * Rows)): " << cotL.nonZeros() << "/" << cotL.cols() * cotL.rows() << std::endl;
-    std::cout << "Symmetric: " << (cotL.transpose().isApprox(cotL)) << std::endl;
-    std::cout << "Non-negative (Semite Definite Positive): " << (eVal.array() >= 0).all() << std::endl;
-    //Row sum to 0
-    //compute difference
-    Eigen::SparseMatrix<double> iglcotL;
-    igl::cotmatrix(V, F, iglcotL);
-    std::cout << "Cotangent Laplacian difference with igl: " << (Eigen::MatrixXd(iglcotL - cotL).array() < 0.001).all() << std::endl;
-
-    //4.1 Verify it's property
-    std::cout << "Sum of row must be equal to one-ring area/3: " << ((massMatrix * Eigen::VectorXd::Ones(massMatrix.cols()) - massMatrix.diagonal() * 2).array() < 0.001).all() << std::endl;
-    Eigen::SparseMatrix<double> iglmassMatrix;
-    igl::massmatrix(V, F, igl::MassMatrixType::MASSMATRIX_TYPE_DEFAULT, iglmassMatrix);
-    std::cout << "Mass Matrix difference with igl: " << (Eigen::MatrixXd(iglmassMatrix - massMatrix).array() < 0.001).all() << std::endl;
-    //compute difference
+    igl::eigs(cotL, lumpedMassMatrix, 3, igl::EIGS_TYPE_SM, eVec, eVal);
 
     //Compute Heat Equation
-    double dt = 0.000001;
     double c = 1;
+    Eigen::SparseMatrix<double> I(V.rows(),V.rows());
+    I.setIdentity();
+
     Eigen::MatrixXd U(V.rows(), 10);// f
-    U.col(0) = Eigen::VectorXd::Random(V.rows()) + Eigen::VectorXd::Ones(V.rows()); // g
-    //igl::cotmatrix(V, F, cotL);
+
+    if (initialization_method == "random") {
+        U.col(0) = Eigen::VectorXd::Random(V.rows()) + Eigen::VectorXd::Ones(V.rows()); // g
+    }
+    else if (initialization_method == "eigen") {
+        U.col(0) = eVec.col(0);
+    }
+
     Eigen::SparseMatrix<double> deltaIntegrationStep;
-    deltaIntegrationStep = c * invMassMatrix * cotL * dt + I; // L
-    //deltaIntegrationStep = c * invMassMatrix * cotL * dt - I;
-    //sol.compute(deltaIntegrationStep);
-    //deltaIntegrationStep = sol.solve(I);
+    Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> sLDLT;
+
+    if (method_name == "implicit") {
+        deltaIntegrationStep = (lumpedMassMatrix + c * cotL * dt);
+        deltaIntegrationStep.makeCompressed();
+        sLDLT.compute(deltaIntegrationStep);
+    }
+    else if (method_name == "explicit")
+    {
+        deltaIntegrationStep = -c * lumpedMassMatrixInverted * cotL * dt + I;
+    }
+
     for (int step = 0; step < 9; step++) {
-        U.col(step + 1) = -deltaIntegrationStep * U.col(step) ;
-        std::cout << "Step: " << step + 1 << "Min: " << U.col(step + 1).minCoeff() << "Max: " << U.col(step + 1).maxCoeff() << "Average: " << U.col(step + 1).mean() << std::endl;
+        if(method_name == "implicit"){
+            U.col(step + 1) = sLDLT.solve(lumpedMassMatrix * U.col(step));
+        }
+        else if (method_name == "explicit") {
+            U.col(step + 1) = deltaIntegrationStep * U.col(step);
+        }
+        std::cout << " Step: " << step + 1 << "Min: " << U.col(step + 1).minCoeff() << "Max: " << U.col(step + 1).maxCoeff() << "Average: " << U.col(step + 1).mean() << std::endl;
     }
 
     igl::opengl::glfw::Viewer viewer;
@@ -150,3 +166,4 @@ int main(int argc, char * argv[])
     viewer.data().show_lines = false;
     viewer.launch();
 }
+*/
