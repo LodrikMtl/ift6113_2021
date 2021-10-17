@@ -111,7 +111,7 @@ int main(int argc, char * argv[])
     Eigen::SparseMatrix<double> deltaIntegrationStep;
     Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> sLDLT;
 
-    deltaIntegrationStep = ( (3.* lumpedMassMatrix) - (lambda * cotL * 0.5 * dt));
+    deltaIntegrationStep = ( (3.* lumpedMassMatrix) + (lambda * cotL * 0.5 * dt));
     deltaIntegrationStep.makeCompressed();
     sLDLT.compute(deltaIntegrationStep);
 
@@ -135,11 +135,11 @@ int main(int argc, char * argv[])
             {
                 selectedcolumn++;
                 if (selectedcolumn%2){
-                    viewer.data().set_mesh(U[0], F);
+                    viewer.data().set_vertices(U[0]);
                 }
                 else
                 {
-                   //viewer.data().set_mesh(U[iteration - 1], F);
+                   viewer.data().set_vertices(U[iteration - 1]);
                 }
 
                 return true;
