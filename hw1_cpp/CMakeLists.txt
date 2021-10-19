@@ -4,8 +4,8 @@ project(example)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 # libigl
-option(LIBIGL_WITH_OPENGL            "Use OpenGL"         ON)
-option(LIBIGL_WITH_OPENGL_GLFW       "Use GLFW"           ON)
+option(LIBIGL_WITH_OPENGL            "Use OpenGL"         ON)
+option(LIBIGL_WITH_OPENGL_GLFW       "Use GLFW"           ON)
 
 find_package(LIBIGL REQUIRED QUIET)
 
@@ -20,7 +20,7 @@ set(
 set(
 	main_s
  	mains.cpp
- 	trimesh.h
+ 	trimesh.h
 	trimesh.cpp
 	trimesh_types.h
 )

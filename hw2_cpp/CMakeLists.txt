@@ -10,10 +10,28 @@ option(LIBIGL_WITH_OPENGL_GLFW       "Use GLFW"           ON)
 find_package(LIBIGL REQUIRED QUIET)
 
 set(
-        main_src
-        main.cpp
+        main1_src
+        main1.cpp
 )
 
 # Add your project files
-add_executable(${PROJECT_NAME} ${main_src})
-target_link_libraries(${PROJECT_NAME} igl::core igl::opengl_glfw)
+add_executable(main1 ${main1_src})
+target_link_libraries(main1 igl::core igl::opengl_glfw)
+
+set(
+        main2_src
+        main2.cpp
+)
+
+# Add your project files
+add_executable(main2 ${main2_src})
+target_link_libraries(main2 igl::core igl::opengl_glfw)
+
+set(
+        main3_src
+        main3.cpp
+)
+
+# Add your project files
+add_executable(main3 ${main3_src})
+target_link_libraries(main3 igl::core igl::opengl_glfw)
