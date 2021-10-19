@@ -23,3 +23,7 @@ mainlb.cpp expect the arguments in the following orders: ```{method_name} {n} {i
 
 #### Sqrt(3) Arguments
 mains.cpp expect the arguments in the following orders: ```{n} {input_path} ```.
+
+## Homework 2
+
+See report for more information.
