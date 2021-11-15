@@ -9,7 +9,20 @@ option(LIBIGL_WITH_OPENGL_GLFW       "Use GLFW"           ON)
 
 find_package(LIBIGL REQUIRED QUIET)
 
+set(
+        biharmonic_src
+        biharmonic.cpp
+)
+
 # Add your project files
-file(GLOB SRCFILES *.cpp)
-add_executable(${PROJECT_NAME} ${SRCFILES})
-target_link_libraries(${PROJECT_NAME} igl::core igl::opengl_glfw)
+add_executable(biharmonic ${biharmonic_src})
+target_link_libraries(biharmonic igl::core igl::opengl_glfw)
+
+set(
+        arap_src
+        arap.cpp
+)
+
+# Add your project files
+add_executable(arap ${arap_src})
+target_link_libraries(arap igl::core igl::opengl_glfw)
